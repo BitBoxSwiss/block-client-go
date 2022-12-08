@@ -1,0 +1,55 @@
+# See reference docs at
+# https://help.github.com/en/actions/reference/workflow-syntax-for-github-actions
+name: ci
+on: [push, pull_request]
+env:
+  GO_VERSION: "^1.19"
+  GOLANGCI_LINT_VERSION: "v1.50.1"
+
+jobs:
+  lint:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Clone the repo
+        uses: actions/checkout@v2
+      - name: Enable caching
+        uses: actions/cache@v2
+        with:
+          # Increment cache number to invalidate.
+          key: ${{runner.os}}-cache-1
+          path: |
+            ~/go/pkg
+            ~/.cache/go-build
+            ~/.cache/golangci-lint
+      - name: Install Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{env.GO_VERSION}}
+      - name: Install golangci-lint
+        run: |
+          curl -sfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | \
+          sh -s -- -b $HOME $GOLANGCI_LINT_VERSION
+      - name: Lint
+        run: ~/golangci-lint run
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Clone the repo
+        uses: actions/checkout@v2
+      - name: Enable caching
+        uses: actions/cache@v2
+        with:
+          # Increment cache number to invalidate.
+          key: ${{runner.os}}-cache-1
+          path: |
+            ~/go/pkg
+            ~/.cache/go-build
+            ~/.cache/golangci-lint
+      - name: Install Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{env.GO_VERSION}}
+      - name: Test
+        run: |
+          go version
+          go test ./...
