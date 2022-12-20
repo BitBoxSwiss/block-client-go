@@ -22,7 +22,8 @@ import (
 	"time"
 )
 
-// ErrClosed is returned by `Call` and `Subscribe` if the failover client is closed.
+// ErrClosed is returned by `Call` and `Subscribe` if the failover client is closed. It is also
+// passed to `OnDisconnect()` if the connection was closed because the failover client was closed.
 var ErrClosed error = errors.New("closed")
 
 // FailoverError triggers a failover to another server. Other errors are passed through.
@@ -77,8 +78,9 @@ type Options[C Client] struct {
 	// OnConnect is called when a successful connection is established (when `server.Connect()` ran
 	// without an error).
 	OnConnect func(server *Server[C])
-	// OnDisconnect is called when a running server connection is closed.
-	OnDisconnect func(server *Server[C])
+	// OnDisconnect is called when a running server connection is closed. The passed error is hte
+	// error that caused the disconnect.
+	OnDisconnect func(server *Server[C], err error)
 	// OnRetry is called if all servers are not reachable or responded with an error. The passed
 	// error is the last error that triggered a failover.
 	OnRetry func(error)
@@ -219,12 +221,12 @@ func (f *Failover[C]) client() (C, int, error) {
 }
 
 // closeCurrentClient closes the current client if it exists and calls the `OnDisconnect`
-// callback. `mutex` write lock must be held.
-func (f *Failover[C]) closeCurrentClient() {
+// callback. `mutex` write lock must be held. `err` is the error that caused the disconnect.
+func (f *Failover[C]) closeCurrentClient(err error) {
 	if f.currentClient != nil {
 		(*f.currentClient).Close()
 		if f.opts.OnDisconnect != nil {
-			go f.opts.OnDisconnect(f.opts.Servers[f.currentServerIndex])
+			go f.opts.OnDisconnect(f.opts.Servers[f.currentServerIndex], err)
 		}
 		f.currentClient = nil
 	}
@@ -245,7 +247,7 @@ func (f *Failover[C]) triggerFailover(currentClientCounter int, err error) {
 	if currentClientCounter != f.clientCounter {
 		return
 	}
-	f.closeCurrentClient()
+	f.closeCurrentClient(err)
 	f.currentServerIndex = (f.currentServerIndex + 1) % len(f.opts.Servers)
 	f.clientCounter++
 	f.lastErr = err
@@ -379,5 +381,5 @@ func (f *Failover[C]) Close() {
 	}
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
-	f.closeCurrentClient()
+	f.closeCurrentClient(ErrClosed)
 }
