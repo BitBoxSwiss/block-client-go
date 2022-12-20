@@ -166,7 +166,8 @@ func (s *electrumTestsuite) SetupTest() {
 		StartIndex:   func() int { return 0 },
 		RetryTimeout: time.Millisecond,
 		OnConnect:    func(server *Server[*electrum.Client]) {},
-		OnDisconnect: func(server *Server[*electrum.Client]) {
+		OnDisconnect: func(server *Server[*electrum.Client], err error) {
+			require.Error(s.T(), err)
 			count := s.onDisconnectCount.Add(1)
 			onDisconnect := s.onDisconnect.get()
 			if onDisconnect != nil {

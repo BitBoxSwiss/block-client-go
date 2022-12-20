@@ -127,7 +127,9 @@ func (s *testSuite) SetupTest() {
 		OnConnect: func(server *Server[*client]) {
 
 		},
-		OnDisconnect: func(server *Server[*client]) {},
+		OnDisconnect: func(server *Server[*client], err error) {
+			require.Error(s.T(), err)
+		},
 		OnRetry: func(err error) {
 			onRetry := s.onRetry.get()
 			if onRetry != nil {
