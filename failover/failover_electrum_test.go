@@ -40,14 +40,10 @@ type failoverClient struct {
 }
 
 // newFailoverClient creates a new failover client.
-func newFailoverClient(opts *Options[*electrum.Client]) (*failoverClient, error) {
-	failover, err := New[*electrum.Client](opts)
-	if err != nil {
-		return nil, err
-	}
+func newFailoverClient(opts *Options[*electrum.Client]) *failoverClient {
 	return &failoverClient{
-		failover: failover,
-	}, nil
+		failover: New[*electrum.Client](opts),
+	}
 }
 
 func (c *failoverClient) Close() {
@@ -157,7 +153,7 @@ func (s *electrumTestsuite) SetupTest() {
 		}
 	}
 
-	client, err := newFailoverClient(&Options[*electrum.Client]{
+	s.client = newFailoverClient(&Options[*electrum.Client]{
 		Servers: []*Server[*electrum.Client]{
 			mkServer("server1", s.server1.get().Port),
 			mkServer("server2", s.server2.get().Port),
@@ -181,8 +177,6 @@ func (s *electrumTestsuite) SetupTest() {
 			}
 		},
 	})
-	require.NoError(s.T(), err)
-	s.client = client
 }
 
 func (s *electrumTestsuite) TearDownTest() {

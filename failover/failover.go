@@ -16,7 +16,6 @@ package failover
 
 import (
 	"errors"
-	"fmt"
 	"math/rand"
 	"sync"
 	"time"
@@ -25,6 +24,10 @@ import (
 // ErrClosed is returned by `Call` and `Subscribe` if the failover client is closed. It is also
 // passed to `OnDisconnect()` if the connection was closed because the failover client was closed.
 var ErrClosed error = errors.New("closed")
+
+// ErrNoServers is used when no servers are configured, so no connection can be established. It is
+// passed to `OnRetry()`.
+var ErrNoServers error = errors.New("No servers configured.")
 
 // FailoverError triggers a failover to another server. Other errors are passed through.
 type FailoverError struct {
@@ -123,16 +126,16 @@ type Failover[C Client] struct {
 }
 
 // New creates a new failover client.
-func New[C Client](opts *Options[C]) (*Failover[C], error) {
-	if len(opts.Servers) == 0 {
-		return nil, errors.New("must provide at least one server")
-	}
+func New[C Client](opts *Options[C]) *Failover[C] {
 	var startServerIndex int
-	if opts.StartIndex != nil {
+	if len(opts.Servers) == 0 {
+		// startServerIndex does not apply. We don't return an error here but treat this as a
+		// connection error with retries, as we might want to add functionality to
+		// add/remove/replace servers dynamically.
+	} else if opts.StartIndex != nil {
 		startServerIndex = opts.StartIndex()
 		if startServerIndex < 0 || startServerIndex >= len(opts.Servers) {
-			return nil, fmt.Errorf(
-				"StartIndex out of bounds: %d (numServers=%d)", startServerIndex, len(opts.Servers))
+			startServerIndex = 0
 		}
 	} else {
 		rand.Seed(time.Now().UnixNano())
@@ -142,7 +145,7 @@ func New[C Client](opts *Options[C]) (*Failover[C], error) {
 		opts:               opts,
 		startServerIndex:   startServerIndex,
 		currentServerIndex: startServerIndex,
-	}, nil
+	}
 }
 
 // `mutex` write lock must be held when calling this function.
@@ -158,6 +161,10 @@ func (f *Failover[C]) establishConnection() error {
 		}
 		f.enableRetry = true
 
+		if len(f.opts.Servers) == 0 {
+			f.lastErr = ErrNoServers
+			continue
+		}
 		server := f.opts.Servers[currentServerIndex]
 		currentClient, err := server.Connect()
 		if err != nil {

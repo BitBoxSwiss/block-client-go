@@ -116,7 +116,7 @@ func (s *testSuite) SetupTest() {
 			},
 		}
 	}
-	failover, err := New(&Options[*client]{
+	s.failover = New(&Options[*client]{
 		Servers: []*Server[*client]{
 			mkServer("server1"),
 			mkServer("server2"),
@@ -137,8 +137,6 @@ func (s *testSuite) SetupTest() {
 			}
 		},
 	})
-	require.NoError(s.T(), err)
-	s.failover = failover
 }
 
 func (s *testSuite) TearDownTest() {
@@ -805,4 +803,28 @@ func (s *testSuite) TestAsyncFailoverWhileClosed() {
 	require.Equal(s.T(), 42, result)
 	require.Equal(s.T(), uint32(1), s.onConnectCount.Load())
 	require.Equal(s.T(), uint32(1), s.onDisconnectCount.Load())
+}
+
+func TestNoServers(t *testing.T) {
+	var failover *Failover[*client]
+	failover = New(&Options[*client]{
+		Servers:      []*Server[*client]{},
+		StartIndex:   func() int { return 0 },
+		RetryTimeout: time.Millisecond,
+		OnConnect: func(server *Server[*client]) {
+			require.Fail(t, "unexpected OnConnect")
+		},
+		OnDisconnect: func(server *Server[*client], err error) {
+			require.Fail(t, "unexpected OnDisconnect")
+		},
+		OnRetry: func(err error) {
+			require.ErrorIs(t, err, ErrNoServers)
+			failover.Close()
+		},
+	})
+	_, err := Call(failover,
+		func(client *client) (int, error) {
+			return 42, nil
+		})
+	require.ErrorIs(t, err, ErrClosed)
 }
