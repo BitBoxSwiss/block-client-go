@@ -40,14 +40,10 @@ type failoverClient struct {
 }
 
 // newFailoverClient creates a new failover client.
-func newFailoverClient(opts *Options[*electrum.Client]) (*failoverClient, error) {
-	failover, err := New[*electrum.Client](opts)
-	if err != nil {
-		return nil, err
-	}
+func newFailoverClient(opts *Options[*electrum.Client]) *failoverClient {
 	return &failoverClient{
-		failover: failover,
-	}, nil
+		failover: New[*electrum.Client](opts),
+	}
 }
 
 func (c *failoverClient) Close() {
@@ -78,6 +74,8 @@ func (c *failoverClient) HeadersSubscribe(result func(header *types.Header, err 
 type electrumTestsuite struct {
 	suite.Suite
 
+	testCounter int
+
 	server1 atomicVal[*test.Server]
 	server2 atomicVal[*test.Server]
 	// Handling responses from server1.
@@ -93,6 +91,7 @@ type electrumTestsuite struct {
 }
 
 func (s *electrumTestsuite) SetupTest() {
+	s.testCounter++
 	s.onConnectCount.Store(0)
 	s.onConnect.set(nil)
 	s.onDisconnectCount.Store(0)
@@ -157,7 +156,8 @@ func (s *electrumTestsuite) SetupTest() {
 		}
 	}
 
-	client, err := newFailoverClient(&Options[*electrum.Client]{
+	currentTestCounter := s.testCounter
+	s.client = newFailoverClient(&Options[*electrum.Client]{
 		Servers: []*Server[*electrum.Client]{
 			mkServer("server1", s.server1.get().Port),
 			mkServer("server2", s.server2.get().Port),
@@ -167,6 +167,9 @@ func (s *electrumTestsuite) SetupTest() {
 		RetryTimeout: time.Millisecond,
 		OnConnect:    func(server *Server[*electrum.Client]) {},
 		OnDisconnect: func(server *Server[*electrum.Client], err error) {
+			if s.testCounter != currentTestCounter {
+				return
+			}
 			require.Error(s.T(), err)
 			count := s.onDisconnectCount.Add(1)
 			onDisconnect := s.onDisconnect.get()
@@ -175,14 +178,15 @@ func (s *electrumTestsuite) SetupTest() {
 			}
 		},
 		OnRetry: func(err error) {
+			if s.testCounter != currentTestCounter {
+				return
+			}
 			onRetry := s.onRetry.get()
 			if onRetry != nil {
 				onRetry()
 			}
 		},
 	})
-	require.NoError(s.T(), err)
-	s.client = client
 }
 
 func (s *electrumTestsuite) TearDownTest() {
@@ -297,14 +301,15 @@ func (s *electrumTestsuite) TestRetryDueToTimeouts() {
 			require.Fail(s.T(), "too many onConnects")
 		}
 	})
+	var server1DisconnectCount, server2DisconnectCount atomic.Uint32
 	s.onDisconnect.set(func(counter uint32, serverName string) {
-		switch counter {
-		case 1:
-			require.Equal(s.T(), "server1", serverName)
-		case 2:
-			require.Equal(s.T(), "server2", serverName)
-		case 3:
-			require.Equal(s.T(), "server1", serverName)
+		switch serverName {
+		case "server1":
+			server1DisconnectCount.Add(1)
+		case "server2":
+			server2DisconnectCount.Add(1)
+		default:
+			require.Failf(s.T(), "unexpected server", "%s", serverName)
 		}
 	})
 
@@ -312,6 +317,8 @@ func (s *electrumTestsuite) TestRetryDueToTimeouts() {
 	require.NoError(s.T(), err)
 	require.Equal(s.T(), expectedResponse, response)
 	require.Equal(s.T(), uint32(4), s.onConnectCount.Load())
+	require.Equal(s.T(), uint32(2), server1DisconnectCount.Load())
+	require.Equal(s.T(), uint32(1), server2DisconnectCount.Load())
 	require.Equal(s.T(), uint32(3), s.onDisconnectCount.Load())
 }
 
