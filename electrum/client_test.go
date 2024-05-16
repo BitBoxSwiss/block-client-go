@@ -23,9 +23,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/digitalbitbox/block-client-go/electrum/types"
-	"github.com/digitalbitbox/block-client-go/jsonrpc/test"
-	jsonrpctypes "github.com/digitalbitbox/block-client-go/jsonrpc/types"
+	"github.com/BitBoxSwiss/block-client-go/electrum/types"
+	"github.com/BitBoxSwiss/block-client-go/jsonrpc/test"
+	jsonrpctypes "github.com/BitBoxSwiss/block-client-go/jsonrpc/types"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
