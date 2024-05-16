@@ -26,8 +26,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/digitalbitbox/block-client-go/electrum/types"
-	"github.com/digitalbitbox/block-client-go/jsonrpc"
+	"github.com/BitBoxSwiss/block-client-go/electrum/types"
+	"github.com/BitBoxSwiss/block-client-go/jsonrpc"
 )
 
 // supportedProtocolVersion reports to the servers the minimal supported electrum

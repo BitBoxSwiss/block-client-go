@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/digitalbitbox/block-client-go/jsonrpc/types"
+	"github.com/BitBoxSwiss/block-client-go/jsonrpc/types"
 	"github.com/stretchr/testify/require"
 )
 
