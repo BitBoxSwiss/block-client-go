@@ -8,12 +8,12 @@ env:
 
 jobs:
   lint:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Clone the repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       - name: Enable caching
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           # Increment cache number to invalidate.
           key: ${{runner.os}}-cache-1
@@ -22,7 +22,7 @@ jobs:
             ~/.cache/go-build
             ~/.cache/golangci-lint
       - name: Install Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v4
         with:
           go-version: ${{env.GO_VERSION}}
       - name: Install golangci-lint
@@ -32,12 +32,12 @@ jobs:
       - name: Lint
         run: ~/golangci-lint run
   test:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Clone the repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       - name: Enable caching
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           # Increment cache number to invalidate.
           key: ${{runner.os}}-cache-1
@@ -46,7 +46,7 @@ jobs:
             ~/.cache/go-build
             ~/.cache/golangci-lint
       - name: Install Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v4
         with:
           go-version: ${{env.GO_VERSION}}
       - name: Test
