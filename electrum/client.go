@@ -63,7 +63,7 @@ type Options struct {
 }
 
 // Client is a high level API access to an Electrum protocol compatible server.  See
-// https://electrumx-spesmilo.readthedocs.io/en/latest/protocol-methods.html selecting the
+// https://electrum-protocol.readthedocs.io/en/latest/protocol-methods.html selecting the
 // `supportedProtocolVersion` currently in use.
 type Client struct {
 	opts            *Options
