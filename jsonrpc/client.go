@@ -47,6 +47,7 @@ type pendingRequest struct {
 type Client struct {
 	opts              *Options
 	conn              net.Conn
+	writeMu           sync.Mutex
 	msgID             int
 	msgIDMu           sync.Mutex
 	pendingRequests   map[int]pendingRequest
@@ -188,8 +189,10 @@ func (c *Client) Method(
 	}
 	c.pendingRequestsMu.Unlock()
 
+	c.writeMu.Lock()
 	_ = c.conn.SetWriteDeadline(time.Now().Add(writeTimeout))
 	_, err = c.conn.Write(msg)
+	c.writeMu.Unlock()
 	if err != nil {
 		c.Close()
 		return SocketError(fmt.Errorf("Failed to write to socket: %w", err))
