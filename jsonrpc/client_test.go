@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"sync"
 	"testing"
 	"time"
 
@@ -83,6 +84,55 @@ func (s *testSuite) TestMethodSync() {
 	require.NoError(s.T(), err)
 	require.Equal(s.T(), "response", response)
 	require.Empty(s.T(), client.pendingRequests)
+}
+
+func (s *testSuite) TestMethodConcurrentWritesSerialized() {
+	s.server.OnRequest.Set(func(conn net.Conn, req *types.Request) *types.Response {
+		return &types.Response{
+			JSONRPC: types.JSONRPC,
+			ID:      &req.ID,
+			Result:  test.ToResult(req.ID),
+		}
+	})
+
+	var conn *concurrentWriteDetectingConn
+	client, err := Connect(&Options{
+		Dial: func() (net.Conn, error) {
+			netConn, err := s.dial()
+			if err != nil {
+				return nil, err
+			}
+			conn = newConcurrentWriteDetectingConn(netConn)
+			return conn, nil
+		},
+	})
+	require.NoError(s.T(), err)
+	defer client.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	const numRequests = 32
+	start := make(chan struct{})
+	errs := make(chan error, numRequests)
+	var wg sync.WaitGroup
+	for i := 0; i < numRequests; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			var response int
+			errs <- client.MethodBlocking(ctx, &response, "method")
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		require.NoError(s.T(), err)
+	}
+	require.Zero(s.T(), conn.concurrentWrites())
 }
 
 // Server returns an error nested in a `{ message: ...}` object.
@@ -259,4 +309,42 @@ func (s *testSuite) TestNotification() {
 	case <-time.After(1 * time.Second):
 		s.T().Fatal("timeout")
 	}
+}
+
+type concurrentWriteDetectingConn struct {
+	net.Conn
+
+	inWrite chan struct{}
+	mu      sync.Mutex
+	count   int
+}
+
+func newConcurrentWriteDetectingConn(conn net.Conn) *concurrentWriteDetectingConn {
+	return &concurrentWriteDetectingConn{
+		Conn:    conn,
+		inWrite: make(chan struct{}, 1),
+	}
+}
+
+func (c *concurrentWriteDetectingConn) Write(b []byte) (int, error) {
+	select {
+	case c.inWrite <- struct{}{}:
+		defer func() {
+			<-c.inWrite
+		}()
+	default:
+		c.mu.Lock()
+		c.count++
+		c.mu.Unlock()
+		return 0, fmt.Errorf("concurrent write detected")
+	}
+
+	time.Sleep(5 * time.Millisecond)
+	return c.Conn.Write(b)
+}
+
+func (c *concurrentWriteDetectingConn) concurrentWrites() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.count
 }
